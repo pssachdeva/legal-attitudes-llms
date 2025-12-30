@@ -2,6 +2,7 @@
 
 # Data
 *.json
+*.csv
 
 # Images
 *.pdf
