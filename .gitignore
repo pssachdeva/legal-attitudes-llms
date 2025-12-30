@@ -1,5 +1,8 @@
 .DS_Store
 
+# Data
+*.json
+
 # Images
 *.pdf
 *.png
