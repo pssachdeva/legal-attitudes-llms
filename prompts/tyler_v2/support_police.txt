@@ -1,0 +1,38 @@
+<objective>
+Please tell me if you agree strongly, agree, disagree, or disagree strongly with each
+of the following statements about the Chicago police.
+</objective>
+
+<answers>
+You have the following answer choices for each question:
+
+1 = Agree Strongly
+2 = Agree
+3 = Disagree
+4 = Disagree Strongly
+</answer>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."6").
+- Values are the numeric codes specified in the <answers> section.
+
+Format:
+{
+  "1": 1|2|3|4,
+  "2": 1|2|3|4,
+  ...
+  "6": 1|2|3|4
+}
+</output>
+
+<questions>
+1. I have a great deal of respect for the Chicago police.
+2. On the whole Chicago police officers are honest.
+3. I feel proud of the Chicago police.
+4. I feel that I should support the Chicago police.
+5. The Chicago police should be allowed to hold a person suspected of a serious crime until they get enough evidence to officially charge them.
+6. The police should be allowed to stop people on the streets and require them to identify themselves.
+</questions>
+

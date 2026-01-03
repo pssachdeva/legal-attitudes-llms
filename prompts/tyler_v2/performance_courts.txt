@@ -1,0 +1,81 @@
+<objective>
+Please answer the following 10 questions about the performance of the Chicago courts.
+</objective>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."10").
+- Values are the numeric codes shown in that question's answer options (these vary by question).
+
+Format:
+{
+  "1": <number>,
+  "2": <number>,
+  ...
+  "10": <number>
+}
+</output>
+
+<questions>
+1. Overall, how good a job are the Chicago courts doing? Are they doing...
+   1 = A very good job
+   2 = A good job
+   3 = A fair job
+   4 = A poor job
+   5 = A very poor job
+
+2. In general, how satisfied are you with how well the Chicago courts solve the problems that come to court? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Neutral (volunteered)
+   4 = Somewhat dissatisfied
+   5 = Very dissatisfied
+
+3. How satisfied are you with the fairness of the decisions made by the Chicago courts? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Neutral
+   4 = Somewhat dissatisfied
+   5 = Very dissatisfied
+
+4. Some people say that the Chicago courts treat everyone equally, others that they favor some people over others. How about you, do you think that the Chicago courts...
+   1 = Treat everyone equally
+   2 = Favor some people over others
+
+5. Do you feel that people like yourself (people of your age, race, sex, income and nationality) receive the same treatment from the Chicago courts as the average citizen, or are people like yourself treated better or worse than the average citizen?
+   1 = Treated better
+   2 = Treated the same
+   3 = Treated worse
+
+6. Overall, how satisfied are you with the fairness of the way the Chicago courts treat people and handle their problems? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Somewhat dissatisfied
+   4 = Very dissatisfied
+
+7. In general, when people appear in the Chicago courts, how often do you think that their cases are resolved in a satisfactory manner? Are they...
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom resolved satisfactorily
+
+8. How often do citizens receive fair outcomes when they deal with the Chicago courts? Do they...
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom receive fair outcomes
+
+9. And how often do the courts treat citizens fairly and handle their problems in a fair way? Are the courts...
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom fair
+
+10. Court decisions in Chicago are almost always fair.
+   1 = Agree strongly
+   2 = Agree
+   3 = Disagree
+   4 = Disagree strongly
+</questions>
+

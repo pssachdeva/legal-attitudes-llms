@@ -1,0 +1,41 @@
+<objective>
+People have different opinions about how important it is to obey police officers,
+judges and the law. The following questions are concerned with your own feelings
+about obeying the law. Please tell me if you agree or disagree with each of these
+statements.
+</objective>
+
+<answers>
+You have the following answer choices for each question:
+
+1 = Agree
+2 = Neutral
+3 = Disagree
+</answer>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."8").
+- Values are the numeric codes specified in the <answers> section.
+
+Format:
+{
+  "1": 1|2|3,
+  "2": 1|2|3,
+  ...
+  "8": 1|2|3
+}
+</output>
+
+<questions>
+1. People should obey the law even if it goes against what they think is right.
+2. I always try to follow the law even if I think that it is wrong.
+3. Disobeying the law is seldom justified.
+4. It is difficult to break the law and keep one's self-respect.
+5. There is little reason for a person like me to obey the law.
+6. It is hard to blame a person for breaking the law if they can get away with it.
+7. If a person goes to court because of a dispute with another person, and the judge orders them to pay the other person money, they should pay that person money, even if they think that the judge is wrong.
+8. If a person is doing something and a police officer tells them to stop, they should stop even if they feel that what they are doing is legal.
+</questions>
+

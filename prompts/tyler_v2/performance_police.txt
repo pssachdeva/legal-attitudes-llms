@@ -1,0 +1,105 @@
+<objective>
+Please answer the following 14 questions about the performance of the Chicago police.
+</objective>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."14").
+- Values are the numeric codes shown in that question's answer options (these vary by question).
+
+Format:
+{
+  "1": <number>,
+  "2": <number>,
+  ...
+  "14": <number>
+}
+</output>
+
+<questions>
+1. Overall, how good a job are the Chicago police doing? Are they doing...
+   1 = a very good job
+   2 = a good job
+   3 = a fair job
+   4 = a poor job
+   5 = a very poor job
+
+2. In general, how satisfied are you with how well the Chicago police solve problems and help those who call them? Are you...
+   1 = very satisfied
+   2 = somewhat satisfied
+   3 = neutral
+   4 = somewhat dissatisfied
+   5 = very dissatisfied
+
+3. How satisfied are you with the fairness of the outcomes that people receive when they deal with the Chicago police? Are you...
+   1 = very satisfied
+   2 = somewhat satisfied
+   3 = neutral
+   4 = somewhat dissatisfied
+   5 = very dissatisfied
+
+4. Some people say that the Chicago police treat everyone equally, others that they favor some people over others. How about you, do you think that the police..
+   1 = treat everyone equally
+   2 = favor some people over others
+
+5. Do you feel that people like yourself, that is people of your age, race, sex, income and nationality, receive the same treatment from the Chicago police as the average citizen, or are people like yourself treated better or worse than the average citizen?
+   1 = treated better
+   2 = treated the same
+   3 = treated worse
+
+6. Overall, how satisfied are you with the fairness of the way the Chicago police treat people and handle problems? Are you...
+   1 = very satisfied
+   2 = somewhat satisfied
+   3 = somewhat dissatisfied
+   4 = very dissatisfied
+
+7. In general, when people call the Chicago police for assistance, how often do you think that the police provide them with satisfactory service? Do you think that the police...
+   1 = always
+   2 = usually
+   3 = sometimes
+   4 = seldom provide satisfactory service
+
+8. When people are stopped by the Chicago police, how often do the police handle the situation in a satisfactory way? Do they...
+   1 = always
+   2 = usually
+   3 = sometimes
+   4 = seldom handle the situation satisfactorily
+
+9. How often do citizens receive fair outcomes when they deal with the Chicago police? Do they...
+   1 = always
+   2 = usually
+   3 = sometimes
+   4 = seldom receive fair outcomes
+
+10. And how often do the Chicago police treat citizens fairly and handle their problems in a fair way? Do the police...
+   1 = always
+   2 = usually
+   3 = sometimes
+   4 = seldom treat people fairly
+
+11. How frequently do the Chicago police patrol the residential areas of your own neighborhood? Do they patrol...
+   1 = very frequently
+   2 = somewhat frequently
+   3 = not very frequently
+   4 = not frequently at all
+
+12. If you called the Chicago police in the future, how satisfied do you think that you would be with their handling of your call? Do you think that you would be...
+   1 = very satisfied
+   2 = somewhat satisfied
+   3 = somewhat dissatisfied
+   4 = very dissatisfied
+
+13. How fair do you think the outcome you received from the police would be? Would it be...
+   1 = very fair
+   2 = somewhat fair
+   3 = somewhat unfair
+   4 = very unfair
+
+14. How fairly do you think that you would be treated by the police? Would you be treated...
+   1 = very fairly
+   2 = somewhat fairly
+   3 = somewhat unfairly
+   4 = very unfairly
+</questions>
+
