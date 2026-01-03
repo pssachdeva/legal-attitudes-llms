@@ -110,17 +110,18 @@ def query_google(model, prompt_text, temperature, max_tokens, schema_cls, use_st
         config=config,
     )
     raw_text = response.text
-    # Gemini can return None if blocked/filtered - raise with reason
+    # Gemini can return None if blocked/filtered - treat as refusal
     if raw_text is None:
         reason = "unknown"
         if response.candidates:
             reason = str(response.candidates[0].finish_reason)
         elif response.prompt_feedback:
             reason = str(response.prompt_feedback.block_reason)
-        raise RuntimeError(f"Gemini blocked response: {reason}")
+        raw_text = f"[Gemini blocked response: {reason}]"
+        return {"raw": raw_text, "json": make_refusal_response(schema_cls)}
     extracted = extract_json(raw_text)
     if extracted is None:
-        raise RuntimeError(f"Gemini returned no JSON (possible refusal): {raw_text[:200]}")
+        return {"raw": raw_text, "json": make_refusal_response(schema_cls)}
     return {"raw": raw_text, "json": extracted}
 
 
