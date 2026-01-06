@@ -19,6 +19,7 @@ dependencies = [
     "mpl-lego",
     "numpy>=2.4.0",
     "openai>=2.14.0",
+    "openrouter>=0.1.1",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
     "pytest>=9.0.2",
