@@ -19,6 +19,16 @@ class ObligationResponse(StrictModel):
     q8: int = Field(alias="8")
 
 
+class ObligationResponseAlt(StrictModel):
+    """Obligation to Obey the Law scale (8 questions)."""
+    q1: int = Field(alias="1")
+    q2: int = Field(alias="2")
+    q3: int = Field(alias="3")
+    q4: int = Field(alias="4")
+    q5: int = Field(alias="5")
+    q6: int = Field(alias="6")
+
+
 class SupportPoliceResponse(StrictModel):
     """Support for Chicago Police scale (6 questions)."""
     q1: int = Field(alias="1")
@@ -113,6 +123,7 @@ class ComplianceResponse(StrictModel):
 
 SCHEMA_REGISTRY = {
     "ObligationResponse": ObligationResponse,
+    "ObligationResponseAlt": ObligationResponseAlt,
     "SupportPoliceResponse": SupportPoliceResponse,
     "SupportCourtsResponse": SupportCourtsResponse,
     "PerformanceCourtsResponse": PerformanceCourtsResponse,

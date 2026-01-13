@@ -25,4 +25,6 @@ class BatchConfig(BaseModel):
     max_completion_tokens: int = Field(default=500, ge=1)
     use_structured_output: bool = Field(default=True)
     seed: int | None = Field(default=None)
+    repeats: int = Field(default=1, ge=1)
+    concurrency: int = Field(default=5, ge=1)
 

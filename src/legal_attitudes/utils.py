@@ -66,18 +66,34 @@ def result_exists(experiment_name: str, scale_name: str, provider: str, model_na
 # Logging setup
 # ---------------------------------------------------------------------------
 
-def setup_logging():
+def setup_logging(use_tqdm: bool = False):
     """Configure loguru with a clean, readable format."""
     logger.remove()
-    logger.add(
-        sink=sys.stderr,
-        format=(
-            "<magenta><level>{level}</level></magenta>"
-            " | "
-            "<bold><cyan>{file}:{line}</cyan></bold>\n"
-            "<bold>{message}</bold>\n<green><bold>"
-            + "=" * 100
-            + "</bold></green>"
-        ),
-    )
+    if use_tqdm:
+        try:
+            from tqdm import tqdm
+        except Exception:
+            use_tqdm = False
+    if use_tqdm:
+        def _tqdm_sink(message):
+            tqdm.write(message, end="")
 
+        logger.add(
+            _tqdm_sink,
+            format=(
+                "<magenta><level>{level}</level></magenta>"
+                " | "
+                "<bold>{message}</bold>"
+            ),
+        )
+    else:
+        logger.add(
+            sink=sys.stderr,
+            format=(
+                "<magenta><level>{level}</level></magenta>"
+                " | "
+                "<bold><cyan>{file}:{line}</cyan></bold>\n"
+                "<bold>{message}</bold>\n<green><bold>"
+                + "</bold></green>"
+            ),
+        )
