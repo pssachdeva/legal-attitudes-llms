@@ -1,0 +1,32 @@
+# Batch experiment using Batch API (50% discount)
+# Single provider/model required for batch processing
+
+prompts:
+  - path: prompts/tyler_v2/compliance.txt
+    schema_name: ComplianceResponse
+  - path: prompts/tyler_v2/deterrence.txt
+    schema_name: DeterrenceResponse
+  - path: prompts/tyler_v2/peers.txt
+    schema_name: PeersResponse
+  - path: prompts/tyler_v2/morality.txt
+    schema_name: MoralityResponse
+  - path: prompts/tyler_v2/obligation.txt
+    schema_name: ObligationResponse
+  - path: prompts/tyler_v2/support_police.txt
+    schema_name: SupportPoliceResponse
+  - path: prompts/tyler_v2/support_courts.txt
+    schema_name: SupportCourtsResponse
+  - path: prompts/tyler_v2/performance_police.txt
+    schema_name: PerformancePoliceResponse
+  - path: prompts/tyler_v2/performance_courts.txt
+    schema_name: PerformanceCourtsResponse
+
+models:
+  - provider: openai
+    name: gpt-4o-2024-11-20
+
+temperature: 1.0
+max_completion_tokens: 8000
+experiment_name: exp1.1.6_tyler_t=1_oai
+use_structured_output: false
+repeats: 50

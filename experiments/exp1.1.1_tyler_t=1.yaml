@@ -1,0 +1,52 @@
+# Exp 1.1.1 -> T=1 sweep of openrouter models with reduced label output
+
+prompts:
+  - path: prompts/tyler_v2/compliance.txt
+    schema_name: ComplianceResponse
+  - path: prompts/tyler_v2/deterrence.txt
+    schema_name: DeterrenceResponse
+  - path: prompts/tyler_v2/peers.txt
+    schema_name: PeersResponse
+  - path: prompts/tyler_v2/morality.txt
+    schema_name: MoralityResponse
+  - path: prompts/tyler_v2/obligation.txt
+    schema_name: ObligationResponse
+  - path: prompts/tyler_v2/support_police.txt
+    schema_name: SupportPoliceResponse
+  - path: prompts/tyler_v2/support_courts.txt
+    schema_name: SupportCourtsResponse
+  - path: prompts/tyler_v2/performance_police.txt
+    schema_name: PerformancePoliceResponse
+  - path: prompts/tyler_v2/performance_courts.txt
+    schema_name: PerformanceCourtsResponse
+
+models:
+  - provider: openrouter
+    name: deepseek/deepseek-v3.2
+  - provider: openrouter
+    name: deepseek/deepseek-chat-v3.1
+  - provider: openrouter
+    name: deepseek/deepseek-r1
+  - provider: openrouter
+    name: qwen/qwen3-max
+  - provider: openrouter
+    name: qwen/qwen3-235b-a22b-2507
+  - provider: openrouter
+    name: qwen/qwen3-next-80b-a3b-thinking
+  - provider: openrouter
+    name: meta-llama/llama-3.3-70b-instruct
+  - provider: openrouter
+    name: meta-llama/llama-3.1-70b-instruct
+  - provider: openrouter
+    name: meta-llama/llama-3-70b-instruct
+  - provider: openrouter
+    name: meta-llama/llama-3.1-405b-instruct
+
+
+temperature: 1.0
+max_completion_tokens: 8000
+experiment_name: exp1.1.1_tyler_t=1
+use_structured_output: false
+repeats: 30
+concurrency: 5
+
