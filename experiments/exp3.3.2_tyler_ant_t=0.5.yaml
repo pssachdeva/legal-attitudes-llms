@@ -1,0 +1,40 @@
+# Batch experiment using Batch API (50% discount)
+# Single provider/model required for batch processing
+
+prompts:
+  - path: prompts/tyler_v2/compliance.txt
+    schema_name: ComplianceResponse
+  - path: prompts/tyler_v2/deterrence.txt
+    schema_name: DeterrenceResponse
+  - path: prompts/tyler_v2/peers.txt
+    schema_name: PeersResponse
+  - path: prompts/tyler_v2/morality.txt
+    schema_name: MoralityResponse
+  - path: prompts/tyler_v2/obligation.txt
+    schema_name: ObligationResponse
+  - path: prompts/tyler_v2/support_police.txt
+    schema_name: SupportPoliceResponse
+  - path: prompts/tyler_v2/support_courts.txt
+    schema_name: SupportCourtsResponse
+  - path: prompts/tyler_v2/performance_police.txt
+    schema_name: PerformancePoliceResponse
+  - path: prompts/tyler_v2/performance_courts.txt
+    schema_name: PerformanceCourtsResponse
+
+models:
+  - provider: anthropic
+    name: claude-3-7-sonnet-20250219
+  - provider: anthropic
+    name: claude-sonnet-4-20250514
+  - provider: anthropic
+    name: claude-haiku-4-5-20251001
+  - provider: anthropic
+    name: claude-sonnet-4-5-20250929
+  - provider: anthropic
+    name: claude-opus-4-5-20251101
+
+temperature: 0.5
+max_completion_tokens: 30000
+experiment_name: exp3.3.2_tyler_ant_t=0.5
+use_structured_output: false
+repeats: 50
