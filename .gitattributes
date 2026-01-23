@@ -1,2 +1,1 @@
-data/exp3_tyler_t=0.csv filter=lfs diff=lfs merge=lfs -text
-data/exp3_tyler_t=1.csv filter=lfs diff=lfs merge=lfs -text
+data/Tyler.csv filter=lfs diff=lfs merge=lfs -text

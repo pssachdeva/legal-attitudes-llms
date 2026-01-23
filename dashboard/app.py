@@ -4,11 +4,15 @@ Legal Attitudes LLM Dashboard
 Visualize model responses to legal attitude scales.
 """
 
+import warnings
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+
+# Suppress numpy warnings for correlation calculations with zero std dev
+warnings.filterwarnings("ignore", message="invalid value encountered in divide")
 
 # Constants
 REFUSAL_CODE = 7
@@ -287,8 +291,13 @@ st.markdown(
 _LABEL_VERSION = "v2"  # Increment when MODEL_LABELS or SCALE_LABELS change
 
 
+def _get_file_mtime(file_path: str) -> float:
+    """Get file modification time for cache invalidation."""
+    return Path(file_path).stat().st_mtime
+
+
 @st.cache_data
-def load_data(file_path: str, _version: str = _LABEL_VERSION) -> pd.DataFrame:
+def load_data(file_path: str, _version: str = _LABEL_VERSION, _mtime: float = 0.0) -> pd.DataFrame:
     """Load and cache CSV data."""
     df = pd.read_csv(file_path)
     # Ensure response column is numeric
@@ -325,8 +334,19 @@ def main():
         else 0,
     )
 
-    # Load data
-    df = load_data(datasets[selected_dataset])
+    # Load data (pass mtime to bust cache when file changes)
+    dataset_path = datasets[selected_dataset]
+    df = load_data(str(dataset_path), _mtime=_get_file_mtime(dataset_path))
+
+    # Detect dataset change and reset filters
+    if "current_dataset" not in st.session_state:
+        st.session_state["current_dataset"] = selected_dataset
+    elif st.session_state["current_dataset"] != selected_dataset:
+        # Dataset changed - clear filter selections to reset to defaults
+        st.session_state["current_dataset"] = selected_dataset
+        for key in ["selected_models", "selected_scales"]:
+            if key in st.session_state:
+                del st.session_state[key]
 
     # Dataset Details
     st.sidebar.markdown("---")
@@ -382,6 +402,9 @@ def main():
     openai_models = [m for m in models if m.startswith("gpt-")]
     anthropic_models = [m for m in models if m.startswith("claude-")]
     google_models = [m for m in models if m.startswith("gemini-")]
+    deepseek_models = [m for m in models if m.startswith("deepseek")]
+    llama_models = [m for m in models if m.startswith("meta-llama")]
+    qwen_models = [m for m in models if m.startswith("qwen")]
 
     # Only show provider buttons if those models exist in dataset
     provider_cols = []
@@ -391,12 +414,29 @@ def main():
         provider_cols.append(("Anthropic", anthropic_models))
     if google_models:
         provider_cols.append(("Google", google_models))
+    if deepseek_models:
+        provider_cols.append(("DeepSeek", deepseek_models))
+    if llama_models:
+        provider_cols.append(("Llama", llama_models))
+    if qwen_models:
+        provider_cols.append(("Qwen", qwen_models))
 
     if provider_cols:
-        cols = st.sidebar.columns(len(provider_cols))
-        for i, (provider_name, provider_models) in enumerate(provider_cols):
-            if cols[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
-                st.session_state["selected_models"] = provider_models
+        # Split into two rows of 3 buttons each
+        row1 = provider_cols[:3]
+        row2 = provider_cols[3:]
+
+        if row1:
+            cols1 = st.sidebar.columns(len(row1))
+            for i, (provider_name, provider_models) in enumerate(row1):
+                if cols1[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
+                    st.session_state["selected_models"] = provider_models
+
+        if row2:
+            cols2 = st.sidebar.columns(len(row2))
+            for i, (provider_name, provider_models) in enumerate(row2):
+                if cols2[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
+                    st.session_state["selected_models"] = provider_models
 
     selected_models = st.sidebar.multiselect(
         "Models",
@@ -441,18 +481,43 @@ def main():
     )
     st.session_state["selected_scales"] = selected_scales
 
+    # Temperature filter (only if column exists)
+    selected_temperature = None
+    if "temperature" in df.columns:
+        temperatures = sorted(df["temperature"].dropna().unique())
+
+        if len(temperatures) > 0:
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("#### Temperature")
+
+            if len(temperatures) == 1:
+                # Only one temperature - show as frozen/disabled
+                st.sidebar.text(f"t = {temperatures[0]}")
+                selected_temperature = temperatures[0]
+            else:
+                # Multiple temperatures - show single select
+                selected_temperature = st.sidebar.selectbox(
+                    "Temperature",
+                    options=temperatures,
+                    format_func=lambda x: f"t = {x}",
+                    label_visibility="collapsed",
+                )
+
     # Apply filters
     filtered_df = df[
         (df["model"].isin(selected_models)) & (df["scale"].isin(selected_scales))
     ]
+    # Apply temperature filter if applicable
+    if selected_temperature is not None and "temperature" in df.columns:
+        filtered_df = filtered_df[filtered_df["temperature"] == selected_temperature]
 
     if filtered_df.empty:
         st.warning("No data matches the selected filters.")
         return
 
     # Main content tabs - Response Summary first
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["Response Summary", "Item Summary", "Raw Response Viewer", "Refusal Rate Tracking", "Item Correlations"]
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+        ["Response Summary", "Item Summary", "Raw Response Viewer", "Refusal Rate Tracking", "Item Correlations", "Temperature Comparison"]
     )
 
     # Tab 1: Response Summary (now first)
@@ -773,7 +838,8 @@ def main():
                 except (ValueError, TypeError):
                     return False
 
-            items = sorted([i for i in all_item_data["item"].unique() if is_numeric(i)], key=lambda x: int(x))
+            # Normalize items to integers to avoid duplicates from mixed types (1 vs "1")
+            items = sorted(set(int(i) for i in all_item_data["item"].unique() if is_numeric(i)))
 
             # Get response codes from the data itself (handles scales with varying answer codes)
             # Get all unique non-null responses, excluding refusal code
@@ -866,9 +932,10 @@ def main():
 
                 # Plot bars for each model
                 for i, model in enumerate(models_sorted):
+                    # Compare as strings to handle mixed types in item column
                     model_item_data = all_item_data[
                         (all_item_data["model"] == model) &
-                        (all_item_data["item"] == item)
+                        (all_item_data["item"].astype(str) == str(item))
                     ]["response"]
 
                     # Count responses and convert to frequencies
@@ -1129,17 +1196,150 @@ def main():
 
     # Tab 5: Item Correlations
     with tab5:
+        # Scale Correlation Matrix (across models) - NEW SECTION
+        st.markdown("<h3 style='text-align: center;'>Scale Correlation Matrix (Across Models)</h3>", unsafe_allow_html=True)
+        st.markdown(
+            "<p style='text-align: center; color: #666;'>Correlation between scales using models as observations (each model's average response per scale)</p>",
+            unsafe_allow_html=True,
+        )
+
+        # Exclude refusals for all correlation analyses
+        corr_df = filtered_df[
+            (filtered_df["response"] != REFUSAL_CODE) &
+            (filtered_df["response"].notna())
+        ].copy()
+
+        if not corr_df.empty:
+            # Calculate average response per model per scale (averaging across repeats and items)
+            model_scale_avg = corr_df.groupby(["model", "scale"])["response"].mean().unstack(level="scale")
+
+            if len(model_scale_avg) >= 2 and len(model_scale_avg.columns) >= 2:
+                # Calculate correlation matrix between scales
+                # Each row is a model, each column is a scale, so .corr() gives scale-scale correlations
+                scale_corr_matrix = model_scale_avg.corr()
+
+                # Replace scale IDs with labels
+                scale_corr_matrix.index = [get_scale_label(s) for s in scale_corr_matrix.index]
+                scale_corr_matrix.columns = [get_scale_label(s) for s in scale_corr_matrix.columns]
+
+                # Show number of models used
+                st.markdown(
+                    f"<p style='text-align: center; color: #888; font-size: 0.9em;'>Based on {len(model_scale_avg)} models</p>",
+                    unsafe_allow_html=True,
+                )
+
+                st.dataframe(
+                    scale_corr_matrix.style.format("{:.3f}").background_gradient(
+                        cmap="RdYlGn", axis=None, vmin=-1, vmax=1
+                    ),
+                    use_container_width=True,
+                    hide_index=False,
+                    height=(len(scale_corr_matrix) + 1) * 35 + 3,
+                )
+
+                # Scatter plot for two selected scales
+                st.markdown("<h4 style='text-align: center; margin-top: 30px;'>Scale Comparison Scatter Plot</h4>", unsafe_allow_html=True)
+
+                available_scales = list(model_scale_avg.columns)
+                col1, col2 = st.columns(2)
+                with col1:
+                    scale_x = st.selectbox(
+                        "X-axis Scale",
+                        options=available_scales,
+                        index=0,
+                        format_func=lambda x: get_scale_label(x),
+                        key="scatter_scale_x",
+                    )
+                with col2:
+                    # Default to second scale if available
+                    default_y_idx = 1 if len(available_scales) > 1 else 0
+                    scale_y = st.selectbox(
+                        "Y-axis Scale",
+                        options=available_scales,
+                        index=default_y_idx,
+                        format_func=lambda x: get_scale_label(x),
+                        key="scatter_scale_y",
+                    )
+
+                # Create scatter plot
+                plt.rcParams["font.family"] = "serif"
+                plt.rcParams["font.serif"] = [
+                    "CMU Serif",
+                    "Computer Modern Roman",
+                    "DejaVu Serif",
+                    "Georgia",
+                    "Times New Roman",
+                ]
+
+                fig, ax = plt.subplots(figsize=(8, 6))
+
+                # Get data for the two scales
+                scatter_data = model_scale_avg[[scale_x, scale_y]].dropna()
+
+                # Plot each model with its provider color
+                for model_id in scatter_data.index:
+                    x_val = scatter_data.loc[model_id, scale_x]
+                    y_val = scatter_data.loc[model_id, scale_y]
+                    color = get_model_color(model_id)
+                    ax.scatter(x_val, y_val, c=[color], s=80, edgecolor="black", linewidth=0.5, zorder=3)
+                    # Add model label
+                    ax.annotate(
+                        get_model_label(model_id),
+                        (x_val, y_val),
+                        xytext=(5, 5),
+                        textcoords="offset points",
+                        fontsize=7,
+                        alpha=0.8,
+                    )
+
+                # Calculate and display correlation
+                if len(scatter_data) >= 2:
+                    r = scatter_data[scale_x].corr(scatter_data[scale_y])
+                    ax.set_title(f"r = {r:.3f}", fontsize=12, pad=10)
+
+                ax.set_xlabel(get_scale_label(scale_x), fontsize=11)
+                ax.set_ylabel(get_scale_label(scale_y), fontsize=11)
+
+                # Set axis limits: 1-3 for obligation, 1-4 for everything else
+                x_max = 3 if scale_x == "obligation" else 4
+                y_max = 3 if scale_y == "obligation" else 4
+                ax.set_xlim(1, x_max)
+                ax.set_ylim(1, y_max)
+
+                ax.grid(True, linestyle="-", alpha=0.3, zorder=0)
+                ax.set_axisbelow(True)
+
+                # Add provider legend
+                from matplotlib.patches import Patch
+                providers_in_plot = list(dict.fromkeys([get_provider_from_model(m) for m in scatter_data.index]))
+                legend_patches = [
+                    Patch(facecolor=PROVIDER_COLORS.get(p, "#888888"), edgecolor="black", linewidth=0.5, label=p.title())
+                    for p in providers_in_plot
+                ]
+                ax.legend(
+                    handles=legend_patches,
+                    loc="upper left",
+                    frameon=True,
+                    fontsize=9,
+                )
+
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+
+            else:
+                st.info("Need at least 2 models and 2 scales to calculate scale correlations.")
+        else:
+            st.info("No non-refusal data available for correlation analysis.")
+
+        st.markdown("---")
+
+        # Average Pairwise Item Correlations by Scale
         st.markdown("<h3 style='text-align: center;'>Average Pairwise Item Correlations by Scale</h3>", unsafe_allow_html=True)
         st.markdown(
             "<p style='text-align: center; color: #666;'>Average Pearson correlation between all pairs of items within each scale (excluding refusals)</p>",
             unsafe_allow_html=True,
         )
-
-        # Exclude refusals
-        corr_df = filtered_df[
-            (filtered_df["response"] != REFUSAL_CODE) &
-            (filtered_df["response"].notna())
-        ].copy()
 
         if not corr_df.empty:
             from itertools import combinations
@@ -1265,6 +1465,249 @@ def main():
                 st.info("Need at least 2 models and 2 scales to calculate model correlations.")
         else:
             st.info("No non-refusal data available for correlation analysis.")
+
+    # Tab 6: Temperature Comparison
+    with tab6:
+        st.markdown("<h3 style='text-align: center;'>Temperature Comparison</h3>", unsafe_allow_html=True)
+
+        # Check if temperature column exists and has multiple values
+        if "temperature" not in df.columns:
+            st.warning("No temperature column in this dataset.")
+        else:
+            all_temperatures = sorted(df["temperature"].dropna().unique())
+
+            if len(all_temperatures) < 2:
+                st.warning("Need at least 2 temperature values for comparison.")
+            else:
+                # Temperature selection (ignores sidebar filter, uses full df)
+                st.markdown("<p style='text-align: center; color: #666;'>Select two temperatures to compare (ignores sidebar temperature filter)</p>", unsafe_allow_html=True)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    temp1 = st.selectbox(
+                        "Temperature 1",
+                        options=all_temperatures,
+                        index=0,
+                        format_func=lambda x: f"t = {x}",
+                        key="temp_compare_1",
+                    )
+                with col2:
+                    temp2 = st.selectbox(
+                        "Temperature 2",
+                        options=all_temperatures,
+                        index=min(1, len(all_temperatures) - 1),
+                        format_func=lambda x: f"t = {x}",
+                        key="temp_compare_2",
+                    )
+
+                # Filter data for both temperatures (use model/scale filters from sidebar)
+                df_temp1 = df[
+                    (df["model"].isin(selected_models)) &
+                    (df["scale"].isin(selected_scales)) &
+                    (df["temperature"] == temp1)
+                ]
+                df_temp2 = df[
+                    (df["model"].isin(selected_models)) &
+                    (df["scale"].isin(selected_scales)) &
+                    (df["temperature"] == temp2)
+                ]
+
+                # Convert response to numeric
+                df_temp1 = df_temp1.copy()
+                df_temp2 = df_temp2.copy()
+                df_temp1["response"] = pd.to_numeric(df_temp1["response"], errors="coerce")
+                df_temp2["response"] = pd.to_numeric(df_temp2["response"], errors="coerce")
+
+                st.markdown("---")
+
+                # 1. Mean Response Bar Plot Comparison
+                st.markdown("<h4 style='text-align: center;'>Mean Response by Model (Temperature Comparison)</h4>", unsafe_allow_html=True)
+
+                # Scale selector
+                scale_labels_temp = [scale_to_label.get(s, s) for s in selected_scales]
+                selected_scale_label_temp = st.selectbox(
+                    "Select Scale",
+                    options=scale_labels_temp,
+                    key="temp_compare_scale",
+                )
+                label_to_scale_temp = {scale_to_label.get(s, s): s for s in selected_scales}
+                selected_scale_temp = label_to_scale_temp.get(selected_scale_label_temp, selected_scales[0] if selected_scales else None)
+
+                if selected_scale_temp:
+                    # Get non-refusal data for the selected scale
+                    scale_data_t1 = df_temp1[
+                        (df_temp1["scale"] == selected_scale_temp) &
+                        (df_temp1["response"] != REFUSAL_CODE) &
+                        (df_temp1["response"].notna())
+                    ]
+                    scale_data_t2 = df_temp2[
+                        (df_temp2["scale"] == selected_scale_temp) &
+                        (df_temp2["response"] != REFUSAL_CODE) &
+                        (df_temp2["response"].notna())
+                    ]
+
+                    # Calculate mean per model
+                    mean_t1 = scale_data_t1.groupby("model")["response"].mean()
+                    mean_t2 = scale_data_t2.groupby("model")["response"].mean()
+
+                    # Get all models sorted by capability
+                    all_models_sorted = sorted(selected_models, key=get_model_sort_key)
+
+                    # Build data for plotting
+                    plot_data = []
+                    for model in all_models_sorted:
+                        plot_data.append({
+                            "model": model,
+                            "model_label": get_model_label(model),
+                            "mean_t1": mean_t1.get(model, np.nan),
+                            "mean_t2": mean_t2.get(model, np.nan),
+                        })
+                    plot_df = pd.DataFrame(plot_data)
+
+                    # Create plot
+                    plt.rcParams["font.family"] = "serif"
+                    plt.rcParams["font.serif"] = ["CMU Serif", "Computer Modern Roman", "DejaVu Serif", "Georgia", "Times New Roman"]
+
+                    fig, ax = plt.subplots(figsize=(12, 5))
+
+                    # Calculate x positions with spacing between providers
+                    x_positions = []
+                    current_x = 0
+                    prev_provider = None
+                    provider_spacing = 0.5
+
+                    for model in all_models_sorted:
+                        provider = get_provider_from_model(model)
+                        if prev_provider is not None and provider != prev_provider:
+                            current_x += provider_spacing
+                        x_positions.append(current_x)
+                        current_x += 1
+                        prev_provider = provider
+
+                    bar_width = 0.35
+                    x = np.array(x_positions)
+
+                    # Get colors per model
+                    bar_colors = [get_model_color(m) for m in all_models_sorted]
+
+                    # Plot bars - temp1 solid, temp2 hatched
+                    bars1 = ax.bar(x - bar_width/2, plot_df["mean_t1"], bar_width,
+                                   label=f"t = {temp1}", color=bar_colors, edgecolor="black", linewidth=0.5)
+                    bars2 = ax.bar(x + bar_width/2, plot_df["mean_t2"], bar_width,
+                                   label=f"t = {temp2}", color=bar_colors, edgecolor="black", linewidth=0.5,
+                                   hatch="//", alpha=0.7)
+
+                    ax.set_xticks(x)
+                    ax.set_xticklabels(plot_df["model_label"], rotation=30, ha="right", fontsize=9)
+                    ax.set_ylabel("Mean Response")
+                    ax.set_title(f"{scale_to_label.get(selected_scale_temp, selected_scale_temp)}", fontsize=12)
+                    ax.legend(loc="upper right")
+                    ax.yaxis.grid(True, linestyle="-", alpha=0.3, zorder=0)
+                    ax.set_axisbelow(True)
+
+                    # Set y limits based on scale
+                    y_max = 3 if selected_scale_temp == "obligation" else 4
+                    ax.set_ylim(0, y_max + 0.5)
+
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    plt.close()
+
+                st.markdown("---")
+
+                # 2. Scale Correlation Matrices (5x5, excluding performance/support police/courts)
+                st.markdown("<h4 style='text-align: center;'>Scale Correlation Matrix (Across Models)</h4>", unsafe_allow_html=True)
+                st.markdown(
+                    "<p style='text-align: center; color: #666;'>Excluding Performance and Support scales (Police/Courts)</p>",
+                    unsafe_allow_html=True,
+                )
+
+                # Scales to exclude
+                excluded_scales = ["performance_police", "performance_courts", "support_police", "support_courts"]
+                included_scales = [s for s in selected_scales if s not in excluded_scales]
+
+                if len(included_scales) >= 2:
+                    # Filter to non-refusal data
+                    corr_t1 = df_temp1[
+                        (df_temp1["response"] != REFUSAL_CODE) &
+                        (df_temp1["response"].notna()) &
+                        (df_temp1["scale"].isin(included_scales))
+                    ]
+                    corr_t2 = df_temp2[
+                        (df_temp2["response"] != REFUSAL_CODE) &
+                        (df_temp2["response"].notna()) &
+                        (df_temp2["scale"].isin(included_scales))
+                    ]
+
+                    col1, col2 = st.columns(2)
+
+                    for col, temp_label, corr_data in [(col1, f"t = {temp1}", corr_t1), (col2, f"t = {temp2}", corr_t2)]:
+                        with col:
+                            st.markdown(f"<p style='text-align: center;'><strong>{temp_label}</strong></p>", unsafe_allow_html=True)
+
+                            if not corr_data.empty:
+                                # Calculate average response per model per scale
+                                model_scale_avg = corr_data.groupby(["model", "scale"])["response"].mean().unstack(level="scale")
+
+                                if len(model_scale_avg) >= 2 and len(model_scale_avg.columns) >= 2:
+                                    # Calculate scale correlation matrix
+                                    scale_corr = model_scale_avg.corr()
+
+                                    # Replace scale IDs with labels
+                                    scale_corr.index = [get_scale_label(s) for s in scale_corr.index]
+                                    scale_corr.columns = [get_scale_label(s) for s in scale_corr.columns]
+
+                                    st.dataframe(
+                                        scale_corr.style.format("{:.3f}").background_gradient(
+                                            cmap="RdYlGn", axis=None, vmin=-1, vmax=1
+                                        ),
+                                        use_container_width=True,
+                                        hide_index=False,
+                                        height=(len(scale_corr) + 1) * 35 + 3,
+                                    )
+                                else:
+                                    st.info("Not enough data.")
+                            else:
+                                st.info("No data available.")
+
+                st.markdown("---")
+
+                # 3. Refusal Rates Heatmap
+                st.markdown("<h4 style='text-align: center;'>Refusal Rate by Model and Scale</h4>", unsafe_allow_html=True)
+
+                col1, col2 = st.columns(2)
+
+                for col, temp_label, temp_df in [(col1, f"t = {temp1}", df_temp1), (col2, f"t = {temp2}", df_temp2)]:
+                    with col:
+                        st.markdown(f"<p style='text-align: center;'><strong>{temp_label}</strong></p>", unsafe_allow_html=True)
+
+                        if not temp_df.empty:
+                            # Add labels
+                            temp_df_labeled = temp_df.copy()
+                            temp_df_labeled["model_label"] = temp_df_labeled["model"].apply(get_model_label)
+                            temp_df_labeled["scale_label"] = temp_df_labeled["scale"].apply(get_scale_label)
+
+                            refusal_frac = (
+                                temp_df_labeled.groupby(["model_label", "scale_label"])["response"]
+                                .apply(lambda x: (x == REFUSAL_CODE).mean())
+                                .unstack(level="scale_label")
+                                .round(2)
+                            )
+
+                            # Sort by model capability
+                            sorted_index = sorted(refusal_frac.index, key=get_model_label_sort_key)
+                            refusal_frac = refusal_frac.reindex(sorted_index)
+
+                            st.dataframe(
+                                refusal_frac.style.format("{:.2f}").background_gradient(
+                                    cmap="Reds", axis=None, vmin=0, vmax=1
+                                ),
+                                use_container_width=True,
+                                hide_index=False,
+                                height=(len(refusal_frac) + 1) * 35 + 3,
+                            )
+                        else:
+                            st.info("No data available.")
 
 
 if __name__ == "__main__":
