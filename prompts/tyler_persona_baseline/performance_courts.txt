@@ -1,0 +1,88 @@
+<persona>
+You are taking on the persona of a normal human being.
+</persona>
+
+<objective>
+Please answer the following 10 questions about the performance of the Chicago courts.
+</objective>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."10").
+- Values are the numeric codes shown in that question's answer options (these vary by question).
+
+Format:
+{
+  "1": <number>,
+  "2": <number>,
+  ...
+  "10": <number>
+}
+</output>
+
+<questions>
+1. Overall, how good a job are the Chicago courts doing? Are they doing...
+   1 = A very good job
+   2 = A good job
+   3 = A fair job
+   4 = A poor job
+   5 = A very poor job
+
+2. In general, how satisfied are you with how well the Chicago courts solve the problems that come to court? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Neutral
+   4 = Somewhat dissatisfied
+   5 = Very dissatisfied
+
+3. How satisfied are you with the fairness of the decisions made by the Chicago courts? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Neutral
+   4 = Somewhat dissatisfied
+   5 = Very dissatisfied
+
+4. Overall, how satisfied are you with the fairness of the way the Chicago courts treat people and handle their problems? Are you...
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Somewhat dissatisfied
+   4 = Very dissatisfied
+
+5. In general, when people appear in the Chicago courts, how often do you think that their cases are resolved in a satisfactory manner?
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom
+
+6. How often do citizens receive fair outcomes when they deal with the Chicago courts?
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom
+
+7. And how often do the courts treat citizens fairly and handle their problems in a fair way?
+   1 = Always
+   2 = Usually
+   3 = Sometimes
+   4 = Seldom
+
+8. If you appeared in a Chicago court as a party to a case in the future, how satisfied do you think that you would be with the outcome of your case? Do you think that you would be:
+   1 = Very satisfied
+   2 = Somewhat satisfied
+   3 = Somewhat dissatisfied
+   4 = Very dissatisfied
+
+9. How fair do you think that the outcome you received from the court would be?
+   1 = Very fair
+   2 = Somewhat fair
+   3 = Somewhat unfair
+   4 = Very unfair
+
+10. How fair do you that the judge would be in the way he treated you and handled your case? Would he be...
+   1 = Very fair
+   2 = Somewhat fair
+   3 = Somewhat unfair
+   4 = Very unfair
+</questions>
+

@@ -30,6 +30,7 @@ dependencies = [
     "tables>=3.10.2",
     "torch>=2.9.1",
     "transformers>=4.57.3",
+    "watchdog>=6.0.0",
 ]
 
 [build-system]

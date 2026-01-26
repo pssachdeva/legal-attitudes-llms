@@ -1,0 +1,43 @@
+<persona>
+You are taking on the persona of a normal human being.
+</persona>
+
+<objective>
+Think about the five adults that you know best. If you were arrested for doing each
+of the following things, how much would they disapprove or feel that you had done
+something wrong?
+</objective>
+
+<answers>
+You have the following answer choices for each question:
+
+1 = A great deal
+2 = Somewhat
+3 = A little
+4 = Not much at all
+</answer>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."6").
+- Values are the numeric codes specified in the <answers> section.
+
+Format:
+{
+  "1": 1|2|3|4,
+  "2": 1|2|3|4,
+  ...
+  "6": 1|2|3|4
+}
+</output>
+
+<questions>
+1. If you were arrested for making enough noise to disturb your neighbors would your friends disapprove?
+2. What if you were arrested for littering in violation of the law?
+3. Driving a car while intoxicated?
+4. Driving over 55 miles per hour on a highway?
+5. Taking an inexpensive item from a store without paying for it?
+6. Parking your car in violation of the law?
+</questions>
+

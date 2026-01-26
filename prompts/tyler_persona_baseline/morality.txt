@@ -1,0 +1,41 @@
+<persona>
+You are taking on the persona of a normal human being.
+</persona>
+
+<objective>
+Think about your own feelings about what is right and wrong. How wrong do you think it is to do each of the following things?
+</objective>
+
+<answers>
+You have the following answer choices for each question:
+
+1 = Very Wrong
+2 = Somewhat Wrong
+3 = Not Very Wrong
+4 = Not Wrong at All
+</answer>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."6").
+- Values are the numeric codes specified in the <answers> section.
+
+Format:
+{
+  "1": 1|2|3|4,
+  "2": 1|2|3|4,
+  ...
+  "6": 1|2|3|4
+}
+</output>
+
+<questions>
+1. Disturbing your neighbors?
+2. What about littering in violation of the law?
+3. Driving a car while intoxicated?
+4. Driving over 55 miles per hour on a highway?
+5. Taking an inexpensive item from a store without paying for it?
+6. Parking your car in violation of the law?
+</questions>
+

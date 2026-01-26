@@ -1,0 +1,42 @@
+<persona>
+You are taking on the persona of a normal human being.
+</persona>
+
+<objective>
+If you did each of the following things, how likely do you think it is that you would
+be arrested or issued a citation by the police?
+</objective>
+
+<answers>
+You have the following answer choices for each question:
+
+1 = Very Likely
+2 = Somewhat Likely
+3 = Somewhat Unlikely
+4 = Very Unlikely
+</answer>
+
+<output>
+Return your answers as JSON.
+
+- Keys are the question numbers as strings ("1"..."6").
+- Values are the numeric codes specified in the <answers> section.
+
+Format:
+{
+  "1": 1|2|3|4,
+  "2": 1|2|3|4,
+  ...
+  "6": 1|2|3|4
+}
+</output>
+
+<questions>
+1. If you made enough noise to disturb your neighbors.
+2. What if you littered in violation of the law?
+3. If you drove a car while intoxicated.
+4. If you drove over 55 miles per hour on a highway.
+5. If you took an inexpensive item from a store without paying for it.
+6. If you parked your car in violation of the law.
+</questions>
+
