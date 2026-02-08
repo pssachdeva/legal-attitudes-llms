@@ -675,7 +675,7 @@ def main():
                 for i, (label, row) in enumerate(model_stats.iterrows()):
                     if row["is_refusal"]:
                         ax.text(
-                            x_positions[i], 0.15, "Refusal",
+                            x_positions[i], 1.05, "Refusal",
                             rotation=90, ha="center", va="bottom",
                             fontsize=15, color="black",
                         )
