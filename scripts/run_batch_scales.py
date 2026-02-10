@@ -49,6 +49,7 @@ def run_batch(config_path: str):
         schema_cls = get_schema(prompt_cfg.schema_name)
 
         for model_cfg in cfg.models:
+            model_temperature = model_cfg.temperature if model_cfg.temperature is not None else cfg.temperature
             # Resumability: skip if result exists.
             if result_exists(cfg.experiment_name, prompt_name, model_cfg.provider, model_cfg.name):
                 logger.info(f"[skip] {prompt_name} / {model_cfg.provider}:{model_cfg.name} (already done)")
@@ -61,7 +62,7 @@ def run_batch(config_path: str):
                     provider=model_cfg.provider,
                     model=model_cfg.name,
                     prompt_text=prompt_text,
-                    temperature=cfg.temperature,
+                    temperature=model_temperature,
                     max_tokens=cfg.max_completion_tokens,
                     schema_cls=schema_cls,
                     use_structured_output=cfg.use_structured_output,
@@ -95,4 +96,3 @@ if __name__ == "__main__":
         run_batch(args.config)
     except ValidationError as exc:
         logger.error(f"Invalid config: {exc}")
-

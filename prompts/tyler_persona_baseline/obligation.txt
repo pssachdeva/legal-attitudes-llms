@@ -37,9 +37,7 @@ Format:
 2. I always try to follow the law even if I think that it is wrong.
 3. Disobeying the law is seldom justified.
 4. It is difficult to break the law and keep one's self-respect.
-5. There is little reason for a person like me to obey the law.
-6. It is hard to blame a person for breaking the law if they can get away with it.
-7. If a person goes to court because of a dispute with another person, and the judge orders them to pay the other person money, they should pay that person money, even if they think that the judge is wrong.
-8. If a person is doing something and a police officer tells them to stop, they should stop even if they feel that what they are doing is legal.
+5. If a person goes to court because of a dispute with another person, and the judge orders them to pay the other person money, they should pay that person money, even if they think that the judge is wrong.
+6. If a person is doing something and a police officer tells them to stop, they should stop even if they feel that what they are doing is legal.
 </questions>
 

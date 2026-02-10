@@ -16,6 +16,7 @@ class PromptMessagesConfig(BaseModel):
     schema_name: str  # e.g., "OOLResponse"
     system_prompt_path: Path | None = None
     persona_path: Path | None = None
+    persona_name: str | None = None
     messages: list[Path]
 
 
@@ -55,6 +56,7 @@ class BatchExperimentConfig(BaseModel):
     experiment_name: str
     output_dir: Path | None = None
     persona_path: Path | None = None
+    persona_name: str | None = None
     prompts: list[PromptMessagesConfig]
     models: list[ModelConfig]
     temperature: float = Field(default=0.0, ge=0, le=2)

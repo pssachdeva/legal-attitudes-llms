@@ -1,16 +1,16 @@
 """Process completed batch results from provider batch APIs.
 
 Usage:
-    python scripts/process_batch_results.py experiments/exp1.2.0_batch_openai.yaml
+    python scripts/process_batch_results.py experiments/exp_batch.yaml
 
     # Check status without downloading
-    python scripts/process_batch_results.py experiments/exp1.2.0_batch_openai.yaml --status-only
+    python scripts/process_batch_results.py experiments/exp_batch.yaml --status-only
 
     # Force re-download even if results exist
-    python scripts/process_batch_results.py experiments/exp1.2.0_batch_openai.yaml --force
+    python scripts/process_batch_results.py experiments/exp_batch.yaml --force
 
     # Concatenate results to an existing file (or create it)
-    python scripts/process_batch_results.py experiments/exp1.2.0_batch_openai.yaml --file data/combined.csv
+    python scripts/process_batch_results.py experiments/exp_batch.yaml --file data/combined.csv
 
 This script:
 1. Loads the experiment config to find the experiment folder
@@ -32,10 +32,13 @@ from google import genai
 from loguru import logger
 from openai import OpenAI
 
-from legal_attitudes.api import extract_json, make_refusal_response
-from legal_attitudes.config import BatchConfig
-from legal_attitudes.schemas import get_schema
-from legal_attitudes.utils import RESULTS_DIR, setup_logging
+from legal_attitudes.batch_processing import (
+    build_scale_to_persona,
+    create_results_dataframe,
+    parse_and_save_results,
+)
+from legal_attitudes.config import BatchExperimentConfig
+from legal_attitudes.utils import RESULTS_DIR, ROOT, setup_logging
 
 
 def load_batch_metadata(experiment_dir: Path) -> dict:
@@ -225,212 +228,13 @@ def download_google_results(batch_id: str, output_dir: Path) -> Path:
         )
 
 
-def parse_and_save_results(
-    output_path: Path,
-    experiment_dir: Path,
-    provider: str,
-    model: str,
-    cfg: BatchConfig,
-    force: bool = False
-):
-    """Parse batch output JSONL and save individual result files."""
-    # Build map of scale name -> schema
-    schema_map = {p.path.stem: p.schema_name for p in cfg.prompts}
-    prompt_path_map = {p.path.stem: str(p.path) for p in cfg.prompts}
-
-    # Create output directory
-    safe_model = model.replace("/", "_").replace(":", "_")
-    model_dir = experiment_dir / f"{provider}_{safe_model}"
-    model_dir.mkdir(parents=True, exist_ok=True)
-
-    # Parse results
-    results_parsed = 0
-    results_skipped = 0
-    results_failed = 0
-
-    with open(output_path) as f:
-        for line in f:
-            result = json.loads(line)
-
-            # Extract custom_id to determine scale and repeat
-            if provider == "openai":
-                custom_id = result.get("custom_id")
-                response = result.get("response", {})
-                if response.get("status_code") != 200:
-                    logger.error(f"Failed request: {custom_id} - {response.get('body', {}).get('error')}")
-                    results_failed += 1
-                    continue
-                raw_text = response["body"]["choices"][0]["message"]["content"]
-
-            elif provider == "anthropic":
-                custom_id = result.get("custom_id")
-                if result.get("result", {}).get("type") == "error":
-                    logger.error(f"Failed request: {custom_id} - {result['result']['error']}")
-                    results_failed += 1
-                    continue
-                raw_text = result["result"]["message"]["content"][0]["text"]
-
-            elif provider == "google":
-                custom_id = result.get("key")
-                response = result.get("response")
-                if not response or "error" in response:
-                    logger.error(f"Failed request: {custom_id} - {response.get('error') if response else 'no response'}")
-                    results_failed += 1
-                    continue
-
-                # Extract text from Gemini response - handle different response structures
-                try:
-                    candidates = response.get("candidates", [])
-                    if not candidates:
-                        logger.error(f"No candidates in response for {custom_id}: {response}")
-                        results_failed += 1
-                        continue
-
-                    content = candidates[0].get("content", {})
-                    parts = content.get("parts", [])
-
-                    if parts:
-                        raw_text = parts[0].get("text", "")
-                    elif "text" in content:
-                        # Alternative structure: content.text directly
-                        raw_text = content["text"]
-                    else:
-                        logger.error(f"Could not extract text from response for {custom_id}: {response}")
-                        results_failed += 1
-                        continue
-
-                except (KeyError, IndexError, TypeError) as e:
-                    logger.error(f"Error parsing Google response for {custom_id}: {e}")
-                    logger.debug(f"Response structure: {response}")
-                    results_failed += 1
-                    continue
-
-            else:
-                raise ValueError(f"Unknown provider: {provider}")
-
-            # Parse custom_id: "{scale_name}_repeat_{###}"
-            parts = custom_id.rsplit("_repeat_", 1)
-            if len(parts) != 2:
-                logger.error(f"Invalid custom_id format: {custom_id}")
-                results_failed += 1
-                continue
-
-            scale_name = parts[0]
-            repeat_num = int(parts[1])
-
-            # Check if already exists
-            output_file = model_dir / f"{scale_name}_repeat_{repeat_num:03d}.json"
-            if output_file.exists() and not force:
-                results_skipped += 1
-                continue
-
-            # Get schema
-            schema_name = schema_map.get(scale_name)
-            if not schema_name:
-                logger.error(f"Unknown scale: {scale_name}")
-                results_failed += 1
-                continue
-
-            schema_cls = get_schema(schema_name)
-
-            # Extract JSON
-            extracted = extract_json(raw_text)
-            if extracted is None:
-                logger.warning(f"Failed to extract JSON from {custom_id}, marking as refusal")
-                json_out = make_refusal_response(schema_cls)
-            else:
-                json_out = extracted
-
-            # Build result object
-            result_obj = {
-                "run_index": repeat_num - 1,
-                "prompt": prompt_path_map.get(scale_name, f"prompts/{scale_name}.txt"),
-                "provider": provider,
-                "model": model,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "raw": raw_text,
-                "json": json_out,
-            }
-
-            # Save
-            output_file.write_text(json.dumps(result_obj, indent=2))
-            results_parsed += 1
-
-    logger.info(f"Results: {results_parsed} saved, {results_skipped} skipped, {results_failed} failed")
-
-
-def create_results_dataframe(
-    experiment_dir: Path, provider: str, model: str, temperature: float
-) -> pd.DataFrame:
-    """Create a tidy dataframe from all result files.
-
-    Returns:
-        DataFrame with columns: provider, model, temperature, scale, repeat, item, response, raw_output
-    """
-    safe_model = model.replace("/", "_").replace(":", "_")
-    model_dir = experiment_dir / f"{provider}_{safe_model}"
-
-    if not model_dir.exists():
-        logger.warning(f"Model directory not found: {model_dir}")
-        return pd.DataFrame()
-
-    rows = []
-
-    # Iterate through all result JSON files
-    for result_file in sorted(model_dir.glob("*_repeat_*.json")):
-        # Parse filename: {scale_name}_repeat_{###}.json
-        filename = result_file.stem
-        parts = filename.rsplit("_repeat_", 1)
-        if len(parts) != 2:
-            logger.warning(f"Skipping file with unexpected name: {result_file}")
-            continue
-
-        scale_name = parts[0]
-        repeat_num = int(parts[1])
-
-        # Load result
-        try:
-            result = json.loads(result_file.read_text())
-            json_field = result["json"]
-            raw_output = result.get("raw", "")
-
-            # Handle case where json might already be a dict or a string
-            if isinstance(json_field, dict):
-                parsed_json = json_field
-            elif isinstance(json_field, str):
-                parsed_json = json.loads(json_field)
-            else:
-                logger.warning(f"Unexpected json type in {result_file}: {type(json_field)}")
-                continue
-
-            # Extract each question response
-            for item_num, response_value in parsed_json.items():
-                rows.append({
-                    "provider": provider,
-                    "model": model,
-                    "temperature": temperature,
-                    "scale": scale_name,
-                    "repeat": repeat_num,
-                    "item": item_num,
-                    "response": response_value,
-                    "raw_output": raw_output,
-                })
-        except json.JSONDecodeError as e:
-            logger.warning(f"Invalid JSON in {result_file.name} (likely placeholder/refusal) - skipping")
-            continue
-        except Exception as e:
-            logger.error(f"Error processing {result_file}: {e}")
-            continue
-
-    df = pd.DataFrame(rows)
-    logger.info(f"Created dataframe with {len(df)} rows ({len(rows)} responses)")
-    return df
 
 
 def process_single_batch(
     batch_entry: dict,
     experiment_dir: Path,
-    cfg: BatchConfig,
+    cfg: BatchExperimentConfig,
+    scale_to_persona: dict[str, str],
     status_only: bool,
     force: bool,
 ) -> pd.DataFrame | None:
@@ -441,11 +245,14 @@ def process_single_batch(
     batch_id = batch_entry["batch_id"]
     provider = batch_entry["provider"]
     model = batch_entry["model"]
-    safe_model = model.replace("/", "_").replace(":", "_")
+    model_id = batch_entry.get("model_id", model)
+    temperature = batch_entry.get("temperature", cfg.temperature)
+    safe_model = model_id.replace("/", "_").replace(":", "_")
 
     logger.info(f"Provider: {provider}")
     logger.info(f"Model: {model}")
     logger.info(f"Batch ID: {batch_id}")
+    logger.info(f"Temperature: {temperature}")
 
     # Check status
     if provider == "openai":
@@ -498,11 +305,20 @@ def process_single_batch(
         model=model,
         cfg=cfg,
         force=force,
+        model_id=model_id,
+        temperature=temperature,
     )
 
     # Create dataframe for this model
     logger.info("Creating results dataframe...")
-    df = create_results_dataframe(experiment_dir, provider, model, cfg.temperature)
+    df = create_results_dataframe(
+        experiment_dir,
+        provider,
+        model,
+        temperature,
+        model_id=model_id,
+        scale_to_persona=scale_to_persona,
+    )
 
     return df
 
@@ -517,10 +333,15 @@ def main(
 
     # Load config
     raw = yaml.safe_load(config_path.read_text())
-    cfg = BatchConfig(**raw)
+    cfg = BatchExperimentConfig(**raw)
 
     # Derive experiment directory from config
-    experiment_dir = RESULTS_DIR / cfg.experiment_name
+    if cfg.output_dir:
+        experiment_dir = Path(cfg.output_dir).expanduser()
+        if not experiment_dir.is_absolute():
+            experiment_dir = ROOT / experiment_dir
+    else:
+        experiment_dir = RESULTS_DIR / cfg.experiment_name
 
     # Load metadata
     metadata = load_batch_metadata(experiment_dir)
@@ -530,6 +351,10 @@ def main(
     logger.info(f"Experiment: {cfg.experiment_name}")
     logger.info(f"Experiment dir: {experiment_dir}")
     logger.info(f"Number of batches: {len(batches)}")
+
+    scale_to_persona = build_scale_to_persona(cfg)
+    if scale_to_persona:
+        logger.info("Persona column enabled from config persona_name values")
 
     # Process each batch
     all_dfs = []
@@ -544,6 +369,7 @@ def main(
             batch_entry=batch_entry,
             experiment_dir=experiment_dir,
             cfg=cfg,
+            scale_to_persona=scale_to_persona,
             status_only=status_only,
             force=force,
         )

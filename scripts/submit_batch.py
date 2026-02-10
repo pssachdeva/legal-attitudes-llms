@@ -25,6 +25,26 @@ from legal_attitudes.config import BatchConfig
 from legal_attitudes.utils import RESULTS_DIR, ROOT, setup_logging
 
 
+def format_temperature_suffix(temperature: float) -> str:
+    """Format temperature into a filename-safe suffix."""
+    text = f"{temperature:.4f}".rstrip("0").rstrip(".")
+    return text.replace(".", "p")
+
+
+def model_temperature(model_cfg, default_temp: float) -> float:
+    """Resolve per-model temperature with fallback to default."""
+    return model_cfg.temperature if model_cfg.temperature is not None else default_temp
+
+
+def model_id_for(model_cfg, default_temp: float) -> str:
+    """Build a model identifier that encodes per-model temperature when set."""
+    base = model_cfg.name
+    if model_cfg.temperature is None:
+        return base
+    suffix = format_temperature_suffix(model_temperature(model_cfg, default_temp))
+    return f"{base}__t{suffix}"
+
+
 def save_batch_metadata(cfg: BatchConfig, batch_entries: list, config_path: Path):
     """Save batch metadata to experiment folder.
 
@@ -80,17 +100,19 @@ def main(config_path: str):
     for model_cfg in cfg.models:
         provider = model_cfg.provider
         model_name = model_cfg.name
-        safe_model = model_name.replace("/", "_").replace(":", "_")
+        model_temp = model_temperature(model_cfg, cfg.temperature)
+        model_id = model_id_for(model_cfg, cfg.temperature)
+        safe_model = model_id.replace("/", "_").replace(":", "_")
 
         logger.info("=" * 60)
-        logger.info(f"Submitting batch for {provider}/{model_name}")
+        logger.info(f"Submitting batch for {provider}/{model_name} (temp={model_temp})")
 
         # Create a single-model config for this batch
         single_model_cfg = BatchConfig(
             experiment_name=cfg.experiment_name,
             prompts=cfg.prompts,
             models=[model_cfg],
-            temperature=cfg.temperature,
+            temperature=model_temp,
             max_completion_tokens=cfg.max_completion_tokens,
             seed=cfg.seed,
             use_structured_output=cfg.use_structured_output,
@@ -115,6 +137,8 @@ def main(config_path: str):
             "batch_id": batch_info["batch_id"],
             "provider": provider,
             "model": model_name,
+            "model_id": model_id,
+            "temperature": model_temp,
             "status": batch_info["status"],
             "num_requests": batch_info["num_requests"],
         }

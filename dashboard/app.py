@@ -280,6 +280,35 @@ st.markdown(
     .stMarkdown, .stText, p, span, div {
         font-family: 'Source Serif Pro', 'CMU Serif', 'Computer Modern', Georgia, serif;
     }
+
+    /* Top view switcher: equal-width segments inside a centered panel */
+    .st-key-active_view [data-testid="stSegmentedControl"] {
+        width: 100%;
+    }
+
+    .st-key-active_view [data-baseweb="button-group"] {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+    }
+
+    .st-key-active_view [data-baseweb="button-group"] button {
+        flex: 1 1 auto;
+        min-width: 160px;
+        min-height: 56px;
+        padding-top: 0.55rem;
+        padding-bottom: 0.55rem;
+        line-height: 1.15;
+    }
+
+    .st-key-active_view [data-baseweb="button-group"] button p {
+        white-space: normal;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        hyphens: none;
+        line-height: 1.15;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -318,21 +347,73 @@ def get_available_datasets() -> dict[str, Path]:
 
 
 def main():
-    # Sidebar: Dataset selection
-    st.sidebar.header("Data Selection")
     datasets = get_available_datasets()
 
     if not datasets:
         st.error(f"No CSV files found in {DATA_DIR}")
         return
 
-    selected_dataset = st.sidebar.selectbox(
-        "Select Dataset",
-        options=list(datasets.keys()),
-        index=list(datasets.keys()).index("exp1.1.6_tyler_t=1_oai")
-        if "exp1.1.6_tyler_t=1_oai" in datasets
-        else 0,
-    )
+    # Top-level view selector (replaces tabs so sidebar can react to active view)
+    view_label_to_value = {
+        "Response Summary": "Response Summary",
+        "Item Summary": "Item Summary",
+        "Raw Response Viewer": "Raw Response Viewer",
+        "Refusal Rate Tracking": "Refusal Rate Tracking",
+        "Item Correlations": "Item Correlations",
+        "Temperature Comparison": "Temperature Comparison",
+        "Persona Comparison": "Persona Comparison",
+    }
+    view_options = list(view_label_to_value.keys())
+    mode_switch_container = st.container(border=True)
+    with mode_switch_container:
+        st.markdown(
+            "<p style='text-align: center; margin: 0; font-weight: 700;'>Analysis View</p>",
+            unsafe_allow_html=True,
+        )
+        left_pad, center_panel, right_pad = st.columns([0.4, 9.2, 0.4])
+        with center_panel:
+            active_view_label = st.segmented_control(
+                "View",
+                options=view_options,
+                default=view_options[0],
+                key="active_view",
+                label_visibility="collapsed",
+            )
+    if active_view_label is None:
+        active_view_label = view_options[0]
+    active_view = view_label_to_value[active_view_label]
+    persona_view = active_view == "Persona Comparison"
+
+    # Sidebar: Dataset selection
+    st.sidebar.header("Data Selection")
+    available_files = list(datasets.keys())
+    default_idx_1 = available_files.index("exp1.1.6_tyler_t=1_oai") if "exp1.1.6_tyler_t=1_oai" in available_files else 0
+    default_idx_2 = min(1, len(available_files) - 1)
+
+    if persona_view:
+        # Two dataset selectors for persona comparison
+        persona1_file = st.sidebar.selectbox(
+            "Persona 1",
+            options=available_files,
+            index=default_idx_1,
+            key="persona_compare_file_1",
+        )
+        persona2_file = st.sidebar.selectbox(
+            "Persona 2",
+            options=available_files,
+            index=default_idx_2,
+            key="persona_compare_file_2",
+        )
+        selected_dataset = persona1_file
+    else:
+        # Single dataset selector
+        selected_dataset = st.sidebar.selectbox(
+            "Select Dataset",
+            options=available_files,
+            index=default_idx_1,
+        )
+        persona1_file = selected_dataset
+        persona2_file = available_files[default_idx_2] if len(available_files) > 1 else selected_dataset
 
     # Load data (pass mtime to bust cache when file changes)
     dataset_path = datasets[selected_dataset]
@@ -372,136 +453,138 @@ def main():
     )
 
     # Sidebar filters
-    st.sidebar.markdown("---")
-    st.sidebar.header("Filters")
-
-    # Model filter (show labels, store IDs, sorted by capability)
     models = sorted(df["model"].unique(), key=get_model_sort_key)
-    model_to_label = {m: get_model_label(m) for m in models}
-
-    st.sidebar.markdown("#### Models")
-
-    # Initialize or reset session state for models (filter to valid options)
-    if "selected_models" not in st.session_state:
-        st.session_state["selected_models"] = models
-    else:
-        # Filter to only models that exist in current dataset
-        valid_models = [m for m in st.session_state["selected_models"] if m in models]
-        # If none are valid, select all
-        if not valid_models:
-            valid_models = models
-        st.session_state["selected_models"] = valid_models
-
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("All", key="models_all", width="stretch"):
-        st.session_state["selected_models"] = models
-    if col2.button("None", key="models_none", width="stretch"):
-        st.session_state["selected_models"] = []
-
-    # Provider-specific selection buttons
-    openai_models = [m for m in models if m.startswith("gpt-")]
-    anthropic_models = [m for m in models if m.startswith("claude-")]
-    google_models = [m for m in models if m.startswith("gemini-")]
-    deepseek_models = [m for m in models if m.startswith("deepseek")]
-    llama_models = [m for m in models if m.startswith("meta-llama")]
-    qwen_models = [m for m in models if m.startswith("qwen")]
-
-    # Only show provider buttons if those models exist in dataset
-    provider_cols = []
-    if openai_models:
-        provider_cols.append(("OpenAI", openai_models))
-    if anthropic_models:
-        provider_cols.append(("Anthropic", anthropic_models))
-    if google_models:
-        provider_cols.append(("Google", google_models))
-    if deepseek_models:
-        provider_cols.append(("DeepSeek", deepseek_models))
-    if llama_models:
-        provider_cols.append(("Llama", llama_models))
-    if qwen_models:
-        provider_cols.append(("Qwen", qwen_models))
-
-    if provider_cols:
-        # Split into two rows of 3 buttons each
-        row1 = provider_cols[:3]
-        row2 = provider_cols[3:]
-
-        if row1:
-            cols1 = st.sidebar.columns(len(row1))
-            for i, (provider_name, provider_models) in enumerate(row1):
-                if cols1[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
-                    st.session_state["selected_models"] = provider_models
-
-        if row2:
-            cols2 = st.sidebar.columns(len(row2))
-            for i, (provider_name, provider_models) in enumerate(row2):
-                if cols2[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
-                    st.session_state["selected_models"] = provider_models
-
-    selected_models = st.sidebar.multiselect(
-        "Models",
-        options=models,
-        default=st.session_state["selected_models"],
-        format_func=lambda x: model_to_label.get(x, x),
-        label_visibility="collapsed",
-    )
-    st.session_state["selected_models"] = selected_models
-
-    st.sidebar.markdown("---")
-
-    # Scale filter (show labels, store IDs)
     scales = sorted(df["scale"].unique())
     scale_to_label = {s: get_scale_label(s) for s in scales}
-
-    st.sidebar.markdown("#### Scales")
-
-    # Initialize or reset session state for scales (filter to valid options)
-    if "selected_scales" not in st.session_state:
-        st.session_state["selected_scales"] = scales
-    else:
-        # Filter to only scales that exist in current dataset
-        valid_scales = [s for s in st.session_state["selected_scales"] if s in scales]
-        # If none are valid, select all
-        if not valid_scales:
-            valid_scales = scales
-        st.session_state["selected_scales"] = valid_scales
-
-    col1, col2 = st.sidebar.columns(2)
-    if col1.button("All", key="scales_all", width="stretch"):
-        st.session_state["selected_scales"] = scales
-    if col2.button("None", key="scales_none", width="stretch"):
-        st.session_state["selected_scales"] = []
-
-    selected_scales = st.sidebar.multiselect(
-        "Scales",
-        options=scales,
-        default=st.session_state["selected_scales"],
-        format_func=lambda x: scale_to_label.get(x, x),
-        label_visibility="collapsed",
-    )
-    st.session_state["selected_scales"] = selected_scales
-
-    # Temperature filter (only if column exists)
     selected_temperature = None
-    if "temperature" in df.columns:
-        temperatures = sorted(df["temperature"].dropna().unique())
 
-        if len(temperatures) > 0:
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("#### Temperature")
+    if persona_view:
+        # Persona comparison uses all models/scales from the selected dataset.
+        selected_models = models
+        selected_scales = scales
+    else:
+        st.sidebar.markdown("---")
+        st.sidebar.header("Filters")
 
-            if len(temperatures) == 1:
-                # Only one temperature - show as frozen/disabled
-                st.sidebar.text(f"t = {temperatures[0]}")
-                selected_temperature = temperatures[0]
-            else:
-                # Multiple temperatures - show single select
-                selected_temperature = st.sidebar.selectbox(
-                    "Temperature",
-                    options=temperatures,
-                    format_func=lambda x: f"t = {x}",
-                    label_visibility="collapsed",
-                )
+        # Model filter (show labels, store IDs, sorted by capability)
+        model_to_label = {m: get_model_label(m) for m in models}
+        st.sidebar.markdown("#### Models")
+
+        # Initialize or reset session state for models (filter to valid options)
+        if "selected_models" not in st.session_state:
+            st.session_state["selected_models"] = models
+        else:
+            # Filter to only models that exist in current dataset
+            valid_models = [m for m in st.session_state["selected_models"] if m in models]
+            # If none are valid, select all
+            if not valid_models:
+                valid_models = models
+            st.session_state["selected_models"] = valid_models
+
+        col1, col2 = st.sidebar.columns(2)
+        if col1.button("All", key="models_all", width="stretch"):
+            st.session_state["selected_models"] = models
+        if col2.button("None", key="models_none", width="stretch"):
+            st.session_state["selected_models"] = []
+
+        # Provider-specific selection buttons
+        openai_models = [m for m in models if m.startswith("gpt-")]
+        anthropic_models = [m for m in models if m.startswith("claude-")]
+        google_models = [m for m in models if m.startswith("gemini-")]
+        deepseek_models = [m for m in models if m.startswith("deepseek")]
+        llama_models = [m for m in models if m.startswith("meta-llama")]
+        qwen_models = [m for m in models if m.startswith("qwen")]
+
+        # Only show provider buttons if those models exist in dataset
+        provider_cols = []
+        if openai_models:
+            provider_cols.append(("OpenAI", openai_models))
+        if anthropic_models:
+            provider_cols.append(("Anthropic", anthropic_models))
+        if google_models:
+            provider_cols.append(("Google", google_models))
+        if deepseek_models:
+            provider_cols.append(("DeepSeek", deepseek_models))
+        if llama_models:
+            provider_cols.append(("Llama", llama_models))
+        if qwen_models:
+            provider_cols.append(("Qwen", qwen_models))
+
+        if provider_cols:
+            # Split into two rows of 3 buttons each
+            row1 = provider_cols[:3]
+            row2 = provider_cols[3:]
+
+            if row1:
+                cols1 = st.sidebar.columns(len(row1))
+                for i, (provider_name, provider_models) in enumerate(row1):
+                    if cols1[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
+                        st.session_state["selected_models"] = provider_models
+
+            if row2:
+                cols2 = st.sidebar.columns(len(row2))
+                for i, (provider_name, provider_models) in enumerate(row2):
+                    if cols2[i].button(provider_name, key=f"models_{provider_name.lower()}", width="stretch"):
+                        st.session_state["selected_models"] = provider_models
+
+        selected_models = st.sidebar.multiselect(
+            "Models",
+            options=models,
+            default=st.session_state["selected_models"],
+            format_func=lambda x: model_to_label.get(x, x),
+            label_visibility="collapsed",
+        )
+        st.session_state["selected_models"] = selected_models
+
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("#### Scales")
+
+        # Initialize or reset session state for scales (filter to valid options)
+        if "selected_scales" not in st.session_state:
+            st.session_state["selected_scales"] = scales
+        else:
+            # Filter to only scales that exist in current dataset
+            valid_scales = [s for s in st.session_state["selected_scales"] if s in scales]
+            # If none are valid, select all
+            if not valid_scales:
+                valid_scales = scales
+            st.session_state["selected_scales"] = valid_scales
+
+        col1, col2 = st.sidebar.columns(2)
+        if col1.button("All", key="scales_all", width="stretch"):
+            st.session_state["selected_scales"] = scales
+        if col2.button("None", key="scales_none", width="stretch"):
+            st.session_state["selected_scales"] = []
+
+        selected_scales = st.sidebar.multiselect(
+            "Scales",
+            options=scales,
+            default=st.session_state["selected_scales"],
+            format_func=lambda x: scale_to_label.get(x, x),
+            label_visibility="collapsed",
+        )
+        st.session_state["selected_scales"] = selected_scales
+
+        # Temperature filter (only if column exists)
+        if "temperature" in df.columns:
+            temperatures = sorted(df["temperature"].dropna().unique())
+
+            if len(temperatures) > 0:
+                st.sidebar.markdown("---")
+                st.sidebar.markdown("#### Temperature")
+
+                if len(temperatures) == 1:
+                    # Only one temperature - show as frozen/disabled
+                    st.sidebar.text(f"t = {temperatures[0]}")
+                    selected_temperature = temperatures[0]
+                else:
+                    # Multiple temperatures - show single select
+                    selected_temperature = st.sidebar.selectbox(
+                        "Temperature",
+                        options=temperatures,
+                        format_func=lambda x: f"t = {x}",
+                        label_visibility="collapsed",
+                    )
 
     # Apply filters
     filtered_df = df[
@@ -511,17 +594,12 @@ def main():
     if selected_temperature is not None and "temperature" in df.columns:
         filtered_df = filtered_df[filtered_df["temperature"] == selected_temperature]
 
-    if filtered_df.empty:
+    if filtered_df.empty and not persona_view:
         st.warning("No data matches the selected filters.")
         return
 
-    # Main content tabs - Response Summary first
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-        ["Response Summary", "Item Summary", "Raw Response Viewer", "Refusal Rate Tracking", "Item Correlations", "Temperature Comparison"]
-    )
-
-    # Tab 1: Response Summary (now first)
-    with tab1:
+    # View 1: Response Summary (now first)
+    if active_view == "Response Summary":
         # Exclude refusals and NaN values from mean calculation
         non_refusal_df = filtered_df[
             (filtered_df["response"] != REFUSAL_CODE) &
@@ -808,8 +886,8 @@ def main():
         else:
             st.info("All responses are refusals - no summary statistics available.")
 
-    # Tab 2: Item Summary
-    with tab2:
+    # View 2: Item Summary
+    if active_view == "Item Summary":
         st.markdown("<h3 style='text-align: center;'>Item Response Distribution</h3>", unsafe_allow_html=True)
 
         # Dropdown for scale only (models come from sidebar filter)
@@ -1009,8 +1087,8 @@ def main():
         else:
             st.info("No data available for the selected scale. Make sure models are selected in the sidebar.")
 
-    # Tab 3: Raw Response Viewer
-    with tab3:
+    # View 3: Raw Response Viewer
+    if active_view == "Raw Response Viewer":
         st.header("Raw Response Viewer")
         st.markdown("Browse individual responses with filtering options.")
 
@@ -1131,8 +1209,8 @@ def main():
                     st.markdown("**Raw Model Output**")
                     st.code(str(raw_output), language=None)
 
-    # Tab 4: Refusal Rate Tracking
-    with tab4:
+    # View 4: Refusal Rate Tracking
+    if active_view == "Refusal Rate Tracking":
         # Refusal Fraction Heatmap
         st.markdown("<h3 style='text-align: center;'>Refusal Fraction by Model and Scale</h3>", unsafe_allow_html=True)
         refusal_frac = (
@@ -1194,8 +1272,8 @@ def main():
             },
         )
 
-    # Tab 5: Item Correlations
-    with tab5:
+    # View 5: Item Correlations
+    if active_view == "Item Correlations":
         # Scale Correlation Matrix (across models) - NEW SECTION
         st.markdown("<h3 style='text-align: center;'>Scale Correlation Matrix (Across Models)</h3>", unsafe_allow_html=True)
         st.markdown(
@@ -1466,8 +1544,8 @@ def main():
         else:
             st.info("No non-refusal data available for correlation analysis.")
 
-    # Tab 6: Temperature Comparison
-    with tab6:
+    # View 6: Temperature Comparison
+    if active_view == "Temperature Comparison":
         st.markdown("<h3 style='text-align: center;'>Temperature Comparison</h3>", unsafe_allow_html=True)
 
         # Check if temperature column exists and has multiple values
@@ -1708,6 +1786,303 @@ def main():
                             )
                         else:
                             st.info("No data available.")
+
+    # View 7: Persona Comparison
+    if active_view == "Persona Comparison":
+        st.markdown("<h3 style='text-align: center;'>Persona Comparison</h3>", unsafe_allow_html=True)
+
+        # Load both datasets (selections come from sidebar)
+        persona1_path = datasets[persona1_file]
+        persona2_path = datasets[persona2_file]
+        df_persona1 = load_data(str(persona1_path), _mtime=_get_file_mtime(persona1_path))
+        df_persona2 = load_data(str(persona2_path), _mtime=_get_file_mtime(persona2_path))
+
+        # Extract persona names from the "persona" column
+        if "persona" in df_persona1.columns and df_persona1["persona"].notna().any():
+            persona1_name = df_persona1["persona"].dropna().iloc[0]
+        else:
+            persona1_name = persona1_file
+
+        if "persona" in df_persona2.columns and df_persona2["persona"].notna().any():
+            persona2_name = df_persona2["persona"].dropna().iloc[0]
+        else:
+            persona2_name = persona2_file
+
+
+        # Get common models and scales between the two datasets
+        common_models = list(set(df_persona1["model"].unique()) & set(df_persona2["model"].unique()))
+        common_scales = list(set(df_persona1["scale"].unique()) & set(df_persona2["scale"].unique()))
+
+        if not common_models:
+            st.warning("No common models found between the two datasets.")
+        elif not common_scales:
+            st.warning("No common scales found between the two datasets.")
+        else:
+            # Sort models by capability
+            common_models_sorted = sorted(common_models, key=get_model_sort_key)
+
+            # Filter data to common models and scales
+            df_p1 = df_persona1[
+                (df_persona1["model"].isin(common_models)) &
+                (df_persona1["scale"].isin(common_scales))
+            ].copy()
+            df_p2 = df_persona2[
+                (df_persona2["model"].isin(common_models)) &
+                (df_persona2["scale"].isin(common_scales))
+            ].copy()
+
+            # Ensure numeric response
+            df_p1["response"] = pd.to_numeric(df_p1["response"], errors="coerce")
+            df_p2["response"] = pd.to_numeric(df_p2["response"], errors="coerce")
+
+            st.markdown("---")
+
+            # 1. Mean Response Bar Plot Comparison
+            st.markdown("<h4 style='text-align: center;'>Mean Response by Model</h4>", unsafe_allow_html=True)
+
+            # Scale selector
+            scale_labels_persona = [scale_to_label.get(s, s) for s in common_scales]
+            selected_scale_label_persona = st.selectbox(
+                "Select Scale",
+                options=sorted(scale_labels_persona),
+                key="persona_compare_scale",
+            )
+            label_to_scale_persona = {scale_to_label.get(s, s): s for s in common_scales}
+            selected_scale_persona = label_to_scale_persona.get(selected_scale_label_persona, common_scales[0] if common_scales else None)
+
+            if selected_scale_persona:
+                # Get non-refusal data for the selected scale
+                scale_data_p1 = df_p1[
+                    (df_p1["scale"] == selected_scale_persona) &
+                    (df_p1["response"] != REFUSAL_CODE) &
+                    (df_p1["response"].notna())
+                ]
+                scale_data_p2 = df_p2[
+                    (df_p2["scale"] == selected_scale_persona) &
+                    (df_p2["response"] != REFUSAL_CODE) &
+                    (df_p2["response"].notna())
+                ]
+
+                # Build data for plotting with bootstrap CIs
+                plot_data_persona = []
+                for model in common_models_sorted:
+                    # Persona 1 stats
+                    model_data_p1 = scale_data_p1[scale_data_p1["model"] == model]["response"]
+                    if len(model_data_p1) > 0:
+                        mean_p1 = model_data_p1.mean()
+                        ci_lower_p1, ci_upper_p1 = bootstrap_ci(model_data_p1.values)
+                    else:
+                        mean_p1, ci_lower_p1, ci_upper_p1 = np.nan, np.nan, np.nan
+
+                    # Persona 2 stats
+                    model_data_p2 = scale_data_p2[scale_data_p2["model"] == model]["response"]
+                    if len(model_data_p2) > 0:
+                        mean_p2 = model_data_p2.mean()
+                        ci_lower_p2, ci_upper_p2 = bootstrap_ci(model_data_p2.values)
+                    else:
+                        mean_p2, ci_lower_p2, ci_upper_p2 = np.nan, np.nan, np.nan
+
+                    plot_data_persona.append({
+                        "model": model,
+                        "model_label": get_model_label(model),
+                        "mean_p1": mean_p1,
+                        "ci_lower_p1": ci_lower_p1,
+                        "ci_upper_p1": ci_upper_p1,
+                        "mean_p2": mean_p2,
+                        "ci_lower_p2": ci_lower_p2,
+                        "ci_upper_p2": ci_upper_p2,
+                    })
+                plot_df_persona = pd.DataFrame(plot_data_persona)
+
+                # Create plot
+                plt.rcParams["font.family"] = "serif"
+                plt.rcParams["font.serif"] = ["CMU Serif", "Computer Modern Roman", "DejaVu Serif", "Georgia", "Times New Roman"]
+
+                fig, ax = plt.subplots(figsize=(12, 5))
+
+                # Calculate x positions with spacing between providers
+                x_positions_p = []
+                current_x_p = 0
+                prev_provider_p = None
+                provider_spacing_p = 0.5
+
+                for model in common_models_sorted:
+                    provider = get_provider_from_model(model)
+                    if prev_provider_p is not None and provider != prev_provider_p:
+                        current_x_p += provider_spacing_p
+                    x_positions_p.append(current_x_p)
+                    current_x_p += 1
+                    prev_provider_p = provider
+
+                bar_width_p = 0.35
+                x_p = np.array(x_positions_p)
+
+                # Get colors per model
+                bar_colors_p = [get_model_color(m) for m in common_models_sorted]
+
+                # Calculate error bars
+                yerr_p1_lower = plot_df_persona["mean_p1"] - plot_df_persona["ci_lower_p1"]
+                yerr_p1_upper = plot_df_persona["ci_upper_p1"] - plot_df_persona["mean_p1"]
+                yerr_p2_lower = plot_df_persona["mean_p2"] - plot_df_persona["ci_lower_p2"]
+                yerr_p2_upper = plot_df_persona["ci_upper_p2"] - plot_df_persona["mean_p2"]
+
+                # Plot bars with error bars - persona1 solid, persona2 hatched
+                bars_p1 = ax.bar(x_p - bar_width_p/2, plot_df_persona["mean_p1"], bar_width_p,
+                                 yerr=[yerr_p1_lower, yerr_p1_upper],
+                                 capsize=3,
+                                 label=persona1_name, color=bar_colors_p, edgecolor="black", linewidth=0.5,
+                                 error_kw={"elinewidth": 1, "capthick": 1},
+                                 zorder=3)
+                bars_p2 = ax.bar(x_p + bar_width_p/2, plot_df_persona["mean_p2"], bar_width_p,
+                                 yerr=[yerr_p2_lower, yerr_p2_upper],
+                                 capsize=3,
+                                 label=persona2_name, color=bar_colors_p, edgecolor="black", linewidth=0.5,
+                                 hatch="//", alpha=0.7,
+                                 error_kw={"elinewidth": 1, "capthick": 1},
+                                 zorder=3)
+
+                ax.set_xticks(x_p)
+                ax.set_xticklabels(plot_df_persona["model_label"], rotation=30, ha="right", fontsize=9)
+                ax.set_ylabel("Mean Response")
+                ax.set_title(f"{scale_to_label.get(selected_scale_persona, selected_scale_persona)}", fontsize=12)
+
+                # Custom legend with gray color (no provider colors), centered, ncol=2
+                from matplotlib.patches import Patch
+                legend_patches = [
+                    Patch(facecolor="gray", edgecolor="black", linewidth=0.5, label=persona1_name),
+                    Patch(facecolor="gray", edgecolor="black", linewidth=0.5, hatch="//", alpha=0.7, label=persona2_name),
+                ]
+                ax.legend(handles=legend_patches, loc="upper center", ncol=2, frameon=True, fontsize=12)
+
+                ax.yaxis.grid(True, linestyle="-", alpha=0.3, zorder=0)
+                ax.set_axisbelow(True)
+
+                # Set y limits based on scale
+                y_max_p = 3 if selected_scale_persona == "obligation" else 4
+                ax.set_ylim(1, y_max_p)
+
+                # Remove top and right spines
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+
+                # Add scale-specific directional labels
+                if selected_scale_persona == "compliance":
+                    ax.text(-0.07, y_max_p, "Full\nCompliance", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                    ax.text(-0.07, 1, "No\nCompliance", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                elif selected_scale_persona == "deterrence":
+                    ax.text(-0.07, y_max_p, "Greater\nDeterrence\nEffect", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                    ax.text(-0.07, 1, "No\nDeterrence\nEffect", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                elif selected_scale_persona == "morality":
+                    ax.text(-0.07, y_max_p, "Morally\nPermissive", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                    ax.text(-0.07, 1, "Morally\nStrict", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                elif selected_scale_persona == "obligation":
+                    ax.text(-0.07, y_max_p, "Less\nObligation", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                    ax.text(-0.07, 1, "More\nObligation", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                elif selected_scale_persona == "peers":
+                    ax.text(-0.07, y_max_p, "Weaker\nPeer Effects", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+                    ax.text(-0.07, 1, "Greater\nPeer Effects", transform=ax.get_yaxis_transform(),
+                            fontsize=9, va="center", ha="center")
+
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
+
+            st.markdown("---")
+
+            # 2. Scale Correlation Matrices
+            st.markdown("<h4 style='text-align: center;'>Scale Correlation Matrix (Across Models)</h4>", unsafe_allow_html=True)
+            st.markdown(
+                "<p style='text-align: center; color: #666;'>Excluding Performance and Support scales (Police/Courts)</p>",
+                unsafe_allow_html=True,
+            )
+
+            excluded_scales_p = ["performance_police", "performance_courts", "support_police", "support_courts"]
+            included_scales_p = [s for s in common_scales if s not in excluded_scales_p]
+
+            if len(included_scales_p) >= 2:
+                corr_p1 = df_p1[
+                    (df_p1["response"] != REFUSAL_CODE) &
+                    (df_p1["response"].notna()) &
+                    (df_p1["scale"].isin(included_scales_p))
+                ]
+                corr_p2 = df_p2[
+                    (df_p2["response"] != REFUSAL_CODE) &
+                    (df_p2["response"].notna()) &
+                    (df_p2["scale"].isin(included_scales_p))
+                ]
+
+                col1_corr, col2_corr = st.columns(2)
+
+                for col, p_name, corr_data in [(col1_corr, persona1_name, corr_p1), (col2_corr, persona2_name, corr_p2)]:
+                    with col:
+                        st.markdown(f"<p style='text-align: center;'><strong>{p_name}</strong></p>", unsafe_allow_html=True)
+
+                        if not corr_data.empty:
+                            model_scale_avg_p = corr_data.groupby(["model", "scale"])["response"].mean().unstack(level="scale")
+
+                            if len(model_scale_avg_p) >= 2 and len(model_scale_avg_p.columns) >= 2:
+                                scale_corr_p = model_scale_avg_p.corr()
+                                scale_corr_p.index = [get_scale_label(s) for s in scale_corr_p.index]
+                                scale_corr_p.columns = [get_scale_label(s) for s in scale_corr_p.columns]
+
+                                st.dataframe(
+                                    scale_corr_p.style.format("{:.3f}").background_gradient(
+                                        cmap="RdYlGn", axis=None, vmin=-1, vmax=1
+                                    ),
+                                    use_container_width=True,
+                                    hide_index=False,
+                                    height=(len(scale_corr_p) + 1) * 35 + 3,
+                                )
+                            else:
+                                st.info("Not enough data.")
+                        else:
+                            st.info("No data available.")
+
+            st.markdown("---")
+
+            # 3. Refusal Rates Heatmap
+            st.markdown("<h4 style='text-align: center;'>Refusal Rate by Model and Scale</h4>", unsafe_allow_html=True)
+
+            col1_ref, col2_ref = st.columns(2)
+
+            for col, p_name, p_df in [(col1_ref, persona1_name, df_p1), (col2_ref, persona2_name, df_p2)]:
+                with col:
+                    st.markdown(f"<p style='text-align: center;'><strong>{p_name}</strong></p>", unsafe_allow_html=True)
+
+                    if not p_df.empty:
+                        p_df_labeled = p_df.copy()
+                        p_df_labeled["model_label"] = p_df_labeled["model"].apply(get_model_label)
+                        p_df_labeled["scale_label"] = p_df_labeled["scale"].apply(get_scale_label)
+
+                        refusal_frac_p = (
+                            p_df_labeled.groupby(["model_label", "scale_label"])["response"]
+                            .apply(lambda x: (x == REFUSAL_CODE).mean())
+                            .unstack(level="scale_label")
+                            .round(2)
+                        )
+
+                        sorted_index_p = sorted(refusal_frac_p.index, key=get_model_label_sort_key)
+                        refusal_frac_p = refusal_frac_p.reindex(sorted_index_p)
+
+                        st.dataframe(
+                            refusal_frac_p.style.format("{:.2f}").background_gradient(
+                                cmap="Reds", axis=None, vmin=0, vmax=1
+                            ),
+                            use_container_width=True,
+                            hide_index=False,
+                            height=(len(refusal_frac_p) + 1) * 35 + 3,
+                        )
+                    else:
+                        st.info("No data available.")
 
 
 if __name__ == "__main__":
