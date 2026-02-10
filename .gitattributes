@@ -6,3 +6,4 @@ Chicago_Resident.csv filter=lfs diff=lfs merge=lfs -text
 Israeli_Citizen.csv filter=lfs diff=lfs merge=lfs -text
 Police_High.csv filter=lfs diff=lfs merge=lfs -text
 Police_Low.csv filter=lfs diff=lfs merge=lfs -text
+data/Persona_Baseline_User.csv filter=lfs diff=lfs merge=lfs -text
